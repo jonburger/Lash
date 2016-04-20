@@ -24,11 +24,8 @@ function extend(target, path) {
 			(function(path, value){
 				
 				if (Object.getOwnPropertyDescriptor(target, property).configurable) {
-					
-					//console.log(property);
-					
 					Object.defineProperty(target, property, {
-						configurable: /\b(Array)\b/.test({}.toString.call(target)),
+						configurable: /\b(Object|Array)\b/.test({}.toString.call(target)),
 						enumerable: true,
 						get: function() {
 							return value;
