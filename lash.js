@@ -1,110 +1,263 @@
-function extend(target, path) {
-	target = target || {};
-	
-	if (/\b(Array)\b/.test({}.toString.call(target))) {
-		
-		// monkey patch array methods allowing us to modify arrays and see the changes live
-		Object.getOwnPropertyNames(Array.prototype).forEach(function(property) {
-			if (typeof [][property] === 'function') {
-				Object.defineProperty(target, property, {
-					writable: true,
-					value: function() {
-						var returnValue = [][property].apply(target, arguments);
-						extend(target, path);
-						return returnValue;
-					}
-				});
-			}
-		});
-		
-		// add a custom 'templatable' property mirroring the array length property
-		target['@count'] = target['length'];
-	}
-	
-	// update our POJO with custom getters and setters allowing us to update the DOM
-	Object.keys(target).forEach(function(property) {
-		setProperty(target, property, target[property], (path ? path + '.' : '') + property);
+
+
+
+function template(string/*, scope*/) {
+	var model = {};
+
+	var strings = string.split(/\{\{.*?\}\}/g);
+
+	var expressions = (string.match(/\{\{.*?\}\}/g) || []).map(function(exp) {
+		return { toString: function() { return expression(exp.slice(2,-2)/*, scope*/)(model); } };
 	});
 
-	return target;
-}
+	var result = [strings[0]];
+
+	expressions.forEach(function(exp, i) {
+		result.push(exp, strings[i + 1]);
+	});
+
+	//console.log(result);
+
+	return (function(data) {
+		model = data;
+		return result.join('');
+	});
+};
 
 
-function setProperty(target, property, value, path) {
-	
-	if (!target.hasOwnProperty(property) || Object.getOwnPropertyDescriptor(target, property).configurable) {
-		Object.defineProperty(target, property, {
-			configurable: /\b(Object|Array)\b/.test({}.toString.call(target)),
-			enumerable: true,
+function expression(string/*, scope*/) {
+	return (new Function('model', 'return ' + string))/*.bind(scope || window)*/;
+};
+
+
+function type(object, type) {
+	var t = ({}).toString.call(object).slice(8,-1);
+	return type ? t === type : t;
+};
+
+
+
+function LArray(buffer) {
+
+	/*Object.defineProperties(this, {
+		items: {
+			configurable: true,
+			enumerable: false,
+			writable: true,
+			value: []
+		},
+		length: {
+			configurable: false,
+			enumerable: false,
 			get: function() {
-				return value;
+				return this.items.length
 			},
-			set: function(newValue) {
-				updateDOM(path, value = /\b(Object|Array)\b/.test({}.toString.call(newValue)) ? extend(newValue, path) : newValue);
+			set: function(newlength) {
+				console.log('length changed');
+				this.items.length = newlength;
 			}
-		});
-	}
-	
-	return target[property] = value;
+		}
+	});*/
+
+	this.updateIndexes(buffer);
+
+	// return new Proxy(this, {
+	// 	get: function(target, name){
+	// 		return name in target ? target[name] : target.items[name];
+	// 	},
+	// 	set: function(target, name, value){
+	// 		name in target ? target[name] = value : target.items[name] = value;
+	// 	}
+	// });
 }
 
+LArray.prototype = {
+	items: [],
+	get length() {
+		return this.items.length
+	},
+	set length(newlength) {
+		console.log('length changed');
+		this.items.length = newlength;
+	},
+	updateIndexes: function(buffer) {
+		var indexes = {};
+		var min = this.items.length;
+		var i = buffer || Math.max(Math.ceil(min * 1.25), 100);
 
-function updateDOM(path, value) {
-	Object.keys(binders).forEach(function(type) {
-		[].forEach.call(document.querySelectorAll('[data-lash-' + type + '|="' + path + '"]'), function(element) {
-			binders[type].set.call(element, value);
-
-			var binding = element.getAttribute('data-lash-' + type);
-
-			if (binding.indexOf('-') > -1) {
-				binding.split('-')[1].split(',').forEach(function(event) {
-					if (!element['_' + type + '-' + event]) {
-
-						element['_' + type + '-' + event] = function () {
-
-							updateModel(path, binders[this.type].get.call(this.element));
-
-						}.bind({ type: type, element: element});
-
-						element.addEventListener(event, element['_' + type + '-' + event]);
+		//for (;--i >= min;) {
+		while (--i >= min) {
+			(function(scope, i){
+				indexes[i] = {
+					configurable: true,
+					enumerable: true,
+					get: function() {
+						console.log('property get');
+						return scope[i];
+					},
+					set: function(value) {
+						console.log('property set');
+						scope[i] = value;
 					}
-				});
-			}
-		});
-	});
+				};
+			}(this.items, i));
+		}
+
+		Object.defineProperties(this, indexes);
+	}
+};
+
+// static methods (only really works with `of` and `from`)
+Object.getOwnPropertyNames(Array).forEach(function(property) {
+	if (type(Array[property], 'Function')) {
+		LArray[property] = function(){
+			larray = new LArray();
+			larray.items = Array[property].apply(null, arguments);
+			larray.updateIndexes()
+			return larray;
+		}
+	}
+});
+
+// instance methods
+Object.getOwnPropertyNames(Array.prototype).forEach(function(property) {
+	if (type(([])[property], 'Function')) {
+		LArray.prototype[property] = function(){
+			console.log('method call', property);
+			var value = [][property].apply(this.items, arguments);
+			return Array.isArray(value) ? LArray.from(value) : value;
+		}
+	}
+});
+
+
+
+
+
+function Lash(element, model) {
+	var adom = document.querySelector(element);
+	var vdom = createVirtualDOM(adom);
+
+	//console.log(createActualDOM(vdom));
+
+	adom = adom.parentNode.replaceChild(createActualDOM(vdom), adom);
+	// adom.parentNode.removeChild(adom);
+
+	return {
+		// model
+		get model() {
+			return model;
+		},
+		set model(newmodel) {
+			model = newmodel;
+		},
+		// dom
+		get adom() {
+			return adom;
+		},
+		// vdom
+		get vdom() {
+			return vdom;
+		}
+	};
+
+	function createActualDOM(node) {
+		var target = document.createDocumentFragment();
+
+		walk([node], target);
+
+		return target;
+
+		function walk(source, target) {
+			[].forEach.call(source, function (item) {
+				// element
+				if (item.nodeType === 1) {
+					var anode = target.appendChild(document.createElement(item.tagName));
+
+					walk(item.attributes, anode);
+					walk(item.childNodes, anode);
+				}
+				// text
+				else if (item.nodeType === 3) {
+					target.appendChild(document.createTextNode(item.textContent));
+				}
+				// attribute
+				else if (item.name && item.value) {
+					target.setAttribute(item.name, item.value);
+				}
+			});
+		}
+	}
+
+	function createVirtualDOM(node) {
+		return node && node.nodeType === 1 ? walk([node])[0] : {};
+
+		function walk(source) {
+			var target = [];
+
+			[].forEach.call(source, function (item) {
+				var templ;
+				var vnode;
+
+				// element
+				if (item.nodeType === 1) {
+					vnode = {
+						nodeType: 1,
+						tagName: item.tagName,
+						attributes: walk(item.attributes),
+						childNodes: walk(item.childNodes)
+					};
+				}
+				// text
+				else if (item.nodeType === 3) {
+					templ = template(item.textContent);
+					vnode = {
+						nodeType: 3,
+						get textContent() {
+							return templ(model);
+						}
+					};
+				}
+				// attribute
+				else if (item.name && item.value) {
+					templ = template(item.value);
+					target[item.name] = vnode = {
+						name: item.name,
+						get value() {
+							return templ(model);
+						}
+					};
+
+					// Object.defineProperty(target, vnode.name, {
+					// 	configurable: false,
+					// 	enumerable: false,
+					// 	writable: false,
+					// 	value: vnode
+					// });
+				}
+
+				target[target.length] = vnode;
+			});
+
+			return target;
+		};
+	};
 }
 
 
-function updateModel(path, value) {
-	return path.split('.').reduce(function(previous, current, index, array) {
-		return index < array.length - 1 ? previous[current] || setProperty(previous, current, {}, array.slice(0, index + 1).join('.')) : setProperty(previous, current, value, path);
-	}, data);
-}
+var model = {
+	"fname": "Jon",
+	"lname": "B",
+	"friends": [
+		{
+			"fname": "Amy",
+			"lname": "C"
+		},
+		{
+			"fname": "Nick",
+			"lname": "Clinton"
+		}
+	]
+};
 
-
-var binders = {
-	value: {
-		get: function() {
-			return this.value;
-		},
-		set: function(value) {
-			this.value = value;
-		}
-	},
-	html: {
-		get: function() {
-			return this.innerHTML;
-		},
-		set: function(value) {
-			this.innerHTML = value;
-		}
-	},
-	text: {
-		get: function() {
-			return this.innerText;
-		},
-		set: function(value) {
-			this.innerText = value;
-		}
-	},
-}
+var lash = new Lash('.app', model);

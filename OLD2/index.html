@@ -6,14 +6,17 @@
 </head>
 <body>
 
+	<!--<div data-lash="app">
+		<p data-lash-text="Hello {{model.fname}} {{model.lname}}! {{2*2}}">Hello Amy C!</p>
+		<ul data-lash-items="model.friends">
+			<li data-lash-text="{{item.fname}}"></li>
+		</ul>
+	</div>-->
+
 	<div class="app">
 		<p>Hello {{model.fname}} {{model.lname}}! {{2*2}}</p>
 	</div>
 
-
-	<div class="app">
-		{{ model.friends.forEach(template('<p>Hello {{model.model}} {{model.lname}}! {{2*2}}</p>')) }}
-	</div>
 	
 	<script src="lash.js"></script>
 </body>

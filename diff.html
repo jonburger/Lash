@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+</head>
+<body>
+	
+	<div class="diff">
+		<p class="diff__para diff__para--1">This is the first paragraph</p>
+	</div>
+
+	<div class="diff">
+		<p class="diff__para diff__para--2">This is the second paragraph</p>
+	</div>
+
+
+	<script>
+
+    var buildPath = function( segments ) {
+        if (segments.length === 0) {
+            return '';
+        }
+
+        return '/' + segments.map(function( seg ) {
+            if (typeof seg === 'string') {
+                return seg.replace(/~/g, '~0').replace(/\//g, '~1');
+            }
+            return seg;
+        }).join('/');
+    };
+
+    // TODO: look at Hirschberg's algorithm to do better than O(n^2) space
+    var arrayDiff = function( arr1, arr2, path ) {
+
+		if (!arr1 || !arr2) {
+			return;
+		}
+
+        var len = Math.max(arr1.length, arr2.length) + 1;
+
+        var init = function ( len ) {
+            var table = new Array(len);
+            for (var i = 0; i < len; ++i) {
+                table[i] = new Array(len);
+                table[0][i] = { cost: i, op: i > 0 ? 'i' : undefined };
+                table[i][0] = { cost: i, op: i > 0 ? 'd' : undefined };
+            }
+            return table;
+        };
+
+        var diff = function ( table ) {
+            var arr1val, arr2val, match, ins, del, cost, eql;
+
+            for (var i = 1; i <= arr1.length; ++i) {
+                for (var j = 1; j <= arr2.length; ++j) {
+                    arr1val = arr1[i-1];
+                    arr2val = arr2[j-1];
+                    eql = arr1val === arr2val;
+
+                    match = table[i-1][j-1].cost + (eql ? 0 : 1);
+                    ins = table[i][j-1].cost + 1;
+                    del = table[i-1][j].cost + 1;
+
+                    cost = Math.min(match, ins, del);
+                    table[i][j] = {};
+                    table[i][j].cost = cost;
+                    table[i][j].op = cost === match ? (eql ? 'm' : 'r') : (cost === ins ? 'i' : 'd');
+                }
+            }
+            return table;
+        };
+
+        var constructPath = function ( table ) {
+            var i = arr1.length,
+                j = arr2.length,
+                entry = table[i][j],
+                acc = [];
+
+            while (entry.op !== undefined) {
+                if (entry.op === 'i') {
+                    acc.push({op: 'add', path: buildPath(path.concat(i)), value: arr2[--j]});
+                } else if (entry.op === 'd') {
+                    acc.push({op: 'remove', path: buildPath(path.concat(--i))});
+                } else if (entry.op === 'r') {
+                    acc.push({op: 'replace', path: path.concat(--i), value: arr2[--j]});
+                } else if (entry.op === 'm') {
+                    i--; j--;
+                } else {
+                    throw new Error('Unknown op: ' + entry.op);
+                }
+                entry = table[i][j];
+            }
+
+            return acc;
+        };
+
+        var deepDiff = function( patches ) {
+            var idx, patch, patchIdx;
+
+            for (idx in patches) {
+                patch = patches[idx];
+                if (patch.op === 'replace') {
+                    patchIdx = patch.path[patch.path.length - 1];
+                    patches[idx] = valueDiff(arr1[patchIdx], patch.value, patch.path);
+                }
+            }
+
+            return patches;
+        };
+
+        var flatten = function( arr ) {
+            return arr.map(function( x ) {
+                return Array.isArray(x) ? x : [x];
+            }).reduce(function(a, b) {
+                return a.concat(b);
+            }, []);
+        };
+
+        return flatten(deepDiff(constructPath(diff(init(len)))));
+    };
+
+    var valueDiff = function( val1, val2, path ) {
+        var acc = [], x;
+
+		if (!val1 || !val2) {
+			return;
+		}
+
+		['nodeType', 'nodeName', 'textContent'].forEach(function(x) {
+            if (val1[x]) {
+                acc = acc.concat(valueDiff(val1[x], val2[x], path.concat(x)));
+            } else {
+            	acc.push({op: 'add', path: buildPath(path.concat(x)), value: val2[x]});
+            }
+		});
+
+		['attributes', 'childNodes'].forEach(function(x) {
+            if (val1[x]) {
+                acc = acc.concat(arrayDiff(val1[x], val2[x], path.concat(x)));
+            } else {
+                acc.push({op: 'add', path: buildPath(path.concat(x)), value: val2[x]});
+            }
+		});
+
+		['nodeType', 'nodeName', 'textContent'].forEach(function(x) {
+            if (!(val2[x])) {
+                acc.push({op: 'remove', path: buildPath(path.concat(x))});
+            }
+		});
+
+        return acc;
+    };
+
+    var diff = function( obj1, obj2 ) {
+        return valueDiff(obj1, obj2, []);
+    };
+	</script>
+
+	<script>
+		var nodes = document.querySelectorAll('.diff');
+
+		console.log(diff(nodes[0], nodes[1]));
+	</script>
+
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+</head>
+<body>
+	
+	<p>
+		<label>What is your name?</label>
+		<input type="text" data-lash-value="fullname-input" />
+	</p>
+
+	<p>Hello <span data-lash-text="fullname"></span>.</p>
+	<p>How is the <span data-lash-text="vehicle.name"></span>?</p>
+	<p data-lash-if="friends.0">Have you seen <span data-lash-text="friends.0.fullname"></span> lately?</p>
+	<p data-lash-if="friends.3">What about <span data-lash-text="friends.3.fullname"></span>?</p>
+	<p>So you have <span data-lash-text="friends.@count"></span> friends, well done!</p>
+	<p><label><input type="checkbox" value="Female" data-lash-checked="gender-change" /> is female</label></p>
+	<p><select data-lash-value="gender-change"><option>Male</option><option>Female</option></select> <span data-lash-if="gender" data-lash-html="gender"></span></p>
+	
+	
+	<script>
+		
+		window.Lash = function(model) {
+		
+			var config = {
+				namespace: 'lash',
+				scope: document,
+				binders: {
+					value: {
+						get: function() {
+							return this.value;
+						},
+						set: function(value) {
+							this.value = value;
+						}
+					},
+					checked: {
+						get: function() {
+							return this.checked && (this.value || true);
+						},
+						set: function(value) {
+							this.checked = value && (this.value === value || this.value === undefined);
+						}
+					},
+					html: {
+						get: function() {
+							return this.innerHTML;
+						},
+						set: function(value) {
+							this.innerHTML = value;
+						}
+					},
+					text: {
+						get: function() {
+							return this.innerText;
+						},
+						set: function(value) {
+							this.innerText = value;
+						}
+					},
+					if: {
+						set: function(value) {
+							//console.log(this, value);
+							this.hidden = !value;
+						}
+					},
+					each: {
+						
+					}
+				}
+			};
+			
+			var checked = {};
+			
+			Object.keys(config.binders).forEach(function(type) {
+				var attribute = 'data-' + config.namespace + '-' + type;
+				[].forEach.call(config.scope.querySelectorAll('[' + attribute + ']'), function(element) {
+					var path = element.getAttribute(attribute);
+					
+					console.log(path);
+					
+					// if (!checked[path]) {
+					// 	checked[path] = true;
+					// 	var value = path.split('.').reduce(function(previous, current, index, array) {
+					// 		return previous && current && previous[current];
+					// 	}, model);
+					// 	updateDOM(path, value);
+					// }
+				});
+			});
+			
+			checked = {};
+			
+		}
+		
+		// @title<>model.title
+		// $innerHTML<model.content
+		// @hidden<model.content?
+		// @class<model.content?'bob':'frank'
+	</script>
+
+	
+	<script>
+		var data = {
+			affiliation: 'Rebels',
+			fullname: 'Han Solo',
+			vehicle: {
+				name: 'Millenium Falcon',
+				details: 'Kessel Run in less than 12 parsecs'
+			},
+			hasdroid: false,
+			gender: 'Male',
+			friends: [
+				{
+					fullname: 'Chewbacca'
+				},
+				{
+					fullname: 'Luke Skywalker'
+				},
+				{
+					fullname: 'Leia Organa'
+				}
+			]
+		};
+		
+		Lash(data, {
+			namespace: 'lash',
+			scope: document,
+			binders: {
+				
+			}
+		});
+	</script>
+	
+</body>
+</html>
